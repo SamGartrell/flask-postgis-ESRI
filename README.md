@@ -4,9 +4,9 @@ Architectural overview and instructions for local development
 
 ## Basic Structure
 Primary backend script is `etl.py`:
-  -Uses functions from `etl_functions.py` to retrieve and process geojson data from ArcGIS Servers into workable geopandas dataframes.
-  -Uses functions from `calc_functions.py` to develop attributes based on real estate business logic.
-  -Uses functions from `etl_functions.py` to send processed geopandas dataframes to the postgres database.
+ <br />   - Uses functions from `etl_functions.py` to retrieve and process geojson data from ArcGIS Servers into workable geopandas dataframes.
+ <br />   - Uses functions from `calc_functions.py` to develop attributes based on real estate business logic.
+ <br />   - Uses functions from `etl_functions.py` to send processed geopandas dataframes to the postgres database.
 
 
 ## Environment Setup
