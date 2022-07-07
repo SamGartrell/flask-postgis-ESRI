@@ -10,9 +10,10 @@ name: bwa_env
 channels:
   - defaults
 dependencies:
-  - geoalchemy2
   - geopandas
+  - geoalchemy2
   - numpy
-  - psycopg2
   - requests
+  - psycopg2
   - geojson # might have to install manually after, with conda install -c conda-forge geojson
+# prefix: <path to this workspace> (optional)
