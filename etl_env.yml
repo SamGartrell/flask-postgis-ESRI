@@ -14,6 +14,5 @@ dependencies:
   - geoalchemy2
   - numpy
   - requests
-  - psycopg2
   - geojson # might have to install manually after, with conda install -c conda-forge geojson
 # prefix: <path to this workspace>

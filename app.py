@@ -1,9 +1,6 @@
-"""
-future home of the flask api
-ref: https://stackabuse.com/using-sqlalchemy-with-flask-and-postgresql/
-"""
+#!/bin/sh
+"exec" "`dirname $0`/python" "$0" "$@"
 
-import re
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy as sa
 from flask_migrate import Migrate as mi
