@@ -5,3 +5,5 @@ dependencies:
   - flask
   - flask-sqlalchemy
   - flask-migrate
+  # then, manually install psycopg2-binary with 'pip install psycopg2-binary'
+# prefix: <path to this workspace>
