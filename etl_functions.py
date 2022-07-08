@@ -138,7 +138,7 @@ def geojson_to_gpd(geojson_dir:str, clear_after=True,) -> gpd.GeoDataFrame:
     return data
 
 
-def mk_postgis_url(usr:str, pw:str, host:str, port:str, db:str, schema:str) -> str:
+def mk_postgis_url(usr:str, pw:str, host:str, port:str, db:str) -> str:
     """
     constructs a sequence of strings into a url for a postgres engine.
     params:

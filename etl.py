@@ -34,13 +34,14 @@ host = 'localhost'
 port = '' # no port bc localhost
 db = 'bwa_1'
 
-schema = 'test'
+schema = 'public'
 
 # generate db url (u)
-u = e.mk_postgis_url(user, pw, host, '', db)
+# u = e.mk_postgis_url(user, pw, host, db)
+u = f'postgresql://{user}:{pw}@{host}/{db}'
 
 # create postgres engine
 engine = e.mk_postgis_engine(u)
 
 # push data to postgres
-d.to_postgis('as_etl', engine, schema, if_exists='replace')
+d.to_postgis('taxlots', engine, schema, if_exists='replace')
