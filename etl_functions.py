@@ -68,6 +68,65 @@ def ags_to_dir(host: str, layerid: int, format: str, max_records: int, service_t
             exceeded_limit = False
     return None
 
+
+def ags_to_gdf(host: str, svc:str, stype:str, layerid: int, format: str, rec_cap: int) -> None:
+    """
+    pages data from an arcgis rest server endpoint in geojson format,
+    turns each page into its own GDF, then flattens them into one GDF
+    """
+    offset = 0
+    iter = 0
+    exceeded_limit = True
+    gdf_list = []
+
+    # while exceeded_limit:  # for actual
+    for i in range(2):  # for testing
+
+        d = requests.get(
+            f'https://{host}/arcgis/rest/services/{svc}/{stype}/{layerid}/query?outFields=*&where=1%3D1&f={format}&resultOffset={offset}')
+
+        # verify HTTP status
+        if d.status_code != 200:
+            if offset > 0:
+                raise Exception(
+                    f'Unknown error. Last successful batch offset: {offset}.')
+            else:
+                raise ValueError('Incorrect url probably.')
+
+        # increment offset and iterator
+        offset += rec_cap
+        iter += 1
+
+        # initialize a dict variable for current geojson
+        page = d.json()
+
+        # add timestamp and append to current geojson, one feature at a time
+        ts = datetime.timestamp(datetime.now())
+
+        for feature in page['features']:
+            feature['properties']['timestamp'] = ts
+
+        # make the dict into a gpd gdf
+        p_gdf = gpd.GeoDataFrame.from_features(page)
+        gdf_list.append(p_gdf)
+
+        print(f'round {iter}: {len(page["features"])} records added')
+
+        # verify that there are more records to recieve before looping
+        try:
+            exceeded_limit = d.json()['properties']['exceededTransferLimit']
+        except KeyError:
+            exceeded_limit = False
+    
+    # after pagination is complete, flatten the list of dataframes into one variable
+    compiled_gdf = pd.concat(gdf_list, axis=0)
+
+    print(f'\ngeodataframe created successfully')
+
+    # return the compiled geodataframe
+    return compiled_gdf
+
+
 def list_contents(file_type:str, dir_name:str)->list:
     """
     modified on 6/26/22 from https://gist.github.com/ericrobskyhuntley/790937a759fd89ed77c8831f880f854c
@@ -138,7 +197,7 @@ def geojson_to_gpd(geojson_dir:str, clear_after=True,) -> gpd.GeoDataFrame:
     return data
 
 
-def mk_postgis_url(usr:str, pw:str, host:str, port:str, db:str) -> str:
+def mk_postgis_uri(usr:str, pw:str, host:str, port:str, db:str) -> str:
     """
     constructs a sequence of strings into a url for a postgres engine.
     params:
@@ -166,3 +225,5 @@ def mk_postgis_engine(url:str):
     """
     engine = sa.create_engine(url)
     return engine
+
+
