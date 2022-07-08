@@ -6,7 +6,7 @@
 # If you get a numpy import error, you need to set the default python terminal to cmd
 # View > command palette > Terminal: Select Default Profile > Command Prompt
 
-name: bwa_env
+name: bwa_etl
 channels:
   - defaults
 dependencies:
@@ -14,6 +14,5 @@ dependencies:
   - geoalchemy2
   - numpy
   - requests
-  - psycopg2
   - geojson # might have to install manually after, with conda install -c conda-forge geojson
-# prefix: <path to this workspace> (optional)
+# prefix: <path to this workspace>

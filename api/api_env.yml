@@ -1,7 +1,0 @@
-name: bwa_api
-channels:
-  - defaults
-dependencies:
-  - flask
-  - flask-sqlalchemy
-  - flask-migrate
