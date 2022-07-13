@@ -1,44 +1,39 @@
 """
-basic etl process
+basic etl process.
+draws functions from etl_functions.py and parameters from etl_params.py
+currently contains an example usage of ETL functions and parameters
 """
 
-import etl_functions as e
-import calc_functions as c
-import geopandas as gpd
+import etl_functions as ef
+import etl_params as ep
+import calc_functions as cf
 
-# routing params
-host = 'services5.arcgis.com/7nsPwEMP38bSkCjy'  #break into machine, domain, webadaptor
-service = 'MtLee_FireRoads_and_Trails'
-service_type = 'FeatureServer'
-layer_id = 0
+# initialize db dictionary (from etl_params.py)
+db = ep.postgres1
 
-# query params
-format = 'geojson'
-max_records = 2000
+# initialize datasource dictionary (from etl_params.py)
+ds = ep.zoning
 
-# retrieve data from a particular arcgis server, store in './temp_geojsons'
-d_rd = e.ags_to_gdf(host, service, service_type,
-           layer_id, format, max_records)
+# get some data from an arcgis rest endpoint
+d = ef.ags_to_gdf(ds)
 
+# perform analysis with calc_functions
 
-# # calculations will occur here with functions from the calc_functions script
+# make a postgres engine and push data there
+engine = ef.mk_postgis_engine(db)
+d.to_postgis(db['table'], engine, db['schema'], if_exists=db['if_exists']) # this is a geopandas method
 
+print(f'successful transmission to postgres\
+        \n\ttable: {db["table"]}\
+        \n\tschema: {db["schema"]}\
+        \n\tdb: {db["database"]}')
 
-# initialize variables for connection to postgres
-user = 'postgres'
-pw = 'Only3Follicles'
-host = 'localhost'
-port = '' # no port bc localhost
-db = 'bwa_1'
+print('commencing replacement')
 
-schema = 'public'
+# refresh the row where OBJECTID == 10, pulling the new values from the same ags endpoint as before
+d2 = ef.oids_to_gdf(ds, [10])
 
-# generate db uri (u)
-# u = e.mk_postgis_uri(user, pw, host, db)
-u = f'postgresql://{user}:{pw}@{host}/{db}'
+# using the dataframe created above, perform a SQL update on the DB.
+ef.update_with_gdf(db, db['table'], d2) # note that the table parameter is exposed alongside the db object parameter
 
-# create postgres engine
-engine = e.mk_postgis_engine(u)
-
-# push data to postgres
-d_rd.to_postgis('biz', engine, schema, if_exists='replace')
+print('done')
