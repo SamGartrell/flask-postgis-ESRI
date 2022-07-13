@@ -1,46 +1,39 @@
 """
-Contains Secrets!
-
-The main script for this app's backend. Presently an example run-through of the process
-
-Pulls functions from the two other scripts in the repo to
- - Retrieve data from arcgis servers into a local folder
- - Convert that data into geopandas geodataframe objects
- - Perform analysis on those geodataframes
- - Load those geodataframes as tables into a postgis database
-
-Package Dependencies:
- - geopandas
+basic etl process.
+draws functions from etl_functions.py and parameters from etl_params.py
+currently contains an example usage of ETL functions and parameters
 """
 
-import etl_functions as e
-import calc_functions as c
-import geopandas as gpd
+import etl_functions as ef
+import etl_params as ep
+import calc_functions as cf
 
-# retrieve data from a particular arcgis server, store in './temp_geojsons'
-e.ags_to_dir('services5.arcgis.com/7nsPwEMP38bSkCjy',
-           0, 'geojson', 2000, 'FeatureServer', './temp_geojsons')
+# initialize db dictionary (from etl_params.py)
+db = ep.postgres1
 
-# convert to a geopandas geodataframe (d) and clear the directory
-d = e.geojson_to_gpd('./temp_geojsons', clear_after=True)
+# initialize datasource dictionary (from etl_params.py)
+ds = ep.zoning
 
-# calculations will occur here with functions from the calc_functions script
+# get some data from an arcgis rest endpoint
+d = ef.ags_to_gdf(ds)
 
+# perform analysis with calc_functions
 
-# initialize variables for connection to postgres
-user = 'postgres'
-pw = 'Only3Follicles'
-host = 'localhost'
-port = '' # no port bc localhost
-db = 'bwa_1'
+# make a postgres engine and push data there
+engine = ef.mk_postgis_engine(db)
+d.to_postgis(db['table'], engine, db['schema'], if_exists=db['if_exists']) # this is a geopandas method
 
-schema = 'test'
+print(f'successful transmission to postgres\
+        \n\ttable: {db["table"]}\
+        \n\tschema: {db["schema"]}\
+        \n\tdb: {db["database"]}')
 
-# generate db url (u)
-u = e.mk_postgis_url(user, pw, host, '', db)
+print('commencing replacement')
 
-# create postgres engine
-engine = e.mk_postgis_engine(u)
+# refresh the row where OBJECTID == 10, pulling the new values from the same ags endpoint as before
+d2 = ef.oids_to_gdf(ds, [10])
 
-# push data to postgres
-d.to_postgis('as_etl', engine, schema, if_exists='replace')
+# using the dataframe created above, perform a SQL update on the DB.
+ef.update_with_gdf(db, db['table'], d2) # note that the table parameter is exposed alongside the db object parameter
+
+print('done')

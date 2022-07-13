@@ -1,5 +1,4 @@
-etl/temp_geojsons/dummy.geojson
+temp_geojsons/dummy.geojson
 scratch.py
 __pycache__
-api/bwa_api_test1
-etl/etl_api_test1
+etl_params.py

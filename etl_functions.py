@@ -1,34 +1,46 @@
 """
 created 6/2022 by Sam Gartrell
-
 """
 
-import requests
-from datetime import datetime
-import json
-import geojson
-import glob
-import os
+import requests as r
+from datetime import datetime as dt
 import geopandas as gpd
 import pandas as pd
 import sqlalchemy as sa
+import psycopg2 as ps
+from psycopg2.extras import RealDictCursor
 
 
-
-def ags_to_dir(host: str, layerid: int, format: str, max_records: int, service_type: str, out_dir: str) -> None:
+def ags_to_gdf(endpoint:dict, lyr_def:str=None, returngeo:str=None) -> gpd.GeoDataFrame:
     """
     pages data from an arcgis rest server endpoint in geojson format,
-    writes it to a specified directory
+    turns each page into its own pandas geodataframe (gdf), then flattens them into one gdf
+
+    dependencies: requests as r, datetime as dt, geopandas as gpd, pandas as pd
     """
     offset = 0
     iter = 0
     exceeded_limit = True
+    gdf_list = []
 
+    # create url
+    if lyr_def:
+        url = f'https://{endpoint["host"]}/arcgis/rest/services/{endpoint["service"]}/{endpoint["service_type"]}/{endpoint["layer_id"]}/query?{lyr_def}&outFields=*&f={endpoint["format"]}'
+    else:
+        url = f'https://{endpoint["host"]}/arcgis/rest/services/{endpoint["service"]}/{endpoint["service_type"]}/{endpoint["layer_id"]}/query?outFields=*&where=1%3D1&f={endpoint["format"]}'
+    
+    if returngeo:
+        url += f'&returnGeometry={returngeo}'
+
+    # get records from url
     # while exceeded_limit:  # for actual
-    for i in range(2):  # for testing
-
-        d = requests.get(
-            f'https://{host}/arcgis/rest/services/TEST_PYTHON_ZONING/FeatureServer/{layerid}/query?outFields=*&where=1%3D1&f={format}&resultOffset={offset}')
+    for i in range(4):  # for testing
+        current_url = f'{url}&resultOffset={offset}'
+        d = r.get(
+            current_url
+            )
+        print(f'request made using: \n{current_url}')
+            
 
         # verify HTTP status
         if d.status_code != 200:
@@ -38,26 +50,30 @@ def ags_to_dir(host: str, layerid: int, format: str, max_records: int, service_t
             else:
                 raise ValueError('Incorrect url probably.')
 
-        # increment offset and iterator
-        offset += max_records
-        iter += 1
-
         # initialize a dict variable for current geojson
         page = d.json()
 
+        # additional HTTP error handling, just in case
+        try:
+            print(f'Error:{page["error"]}')
+            exit()
+
+        except:
+            pass
+
+        # increment offset and iterator after previous page is confirmed successful
+        offset += endpoint["max_records"]
+        iter += 1
+
         # add timestamp and append to current geojson, one feature at a time
-        ts = datetime.timestamp(datetime.now())
+        ts = dt.timestamp(dt.now())
 
         for feature in page['features']:
             feature['properties']['timestamp'] = ts
 
-        # write the geojson in the temp_geojsons directory.
-        gjson_name = f'batch{iter}.geojson'
-        gjson_path = out_dir
-        fin = os.path.join(gjson_path, gjson_name)
-
-        with open(fin, 'w') as temp_json:
-            json.dump(page, temp_json)
+        # make the dict into a gdf and append it to a list (to be flattened later)
+        p_gdf = gpd.GeoDataFrame.from_features(page)
+        gdf_list.append(p_gdf)
 
         print(f'round {iter}: {len(page["features"])} records added')
 
@@ -66,103 +82,205 @@ def ags_to_dir(host: str, layerid: int, format: str, max_records: int, service_t
             exceeded_limit = d.json()['properties']['exceededTransferLimit']
         except KeyError:
             exceeded_limit = False
-    return None
-
-def list_contents(file_type:str, dir_name:str)->list:
-    """
-    modified on 6/26/22 from https://gist.github.com/ericrobskyhuntley/790937a759fd89ed77c8831f880f854c
-    lists the contents of a specified directory.
-    both input strings should start with a period.
-    """
-    pattern = os.path.join(dir_name, f'*{file_type}')
-    file_list = glob.glob(pattern)
-
-    return file_list
-
-def compile_geojson(out_file_name=None, geojson_dir_name='./'):
-    """
-    modified on 6/26/22 from https://gist.github.com/ericrobskyhuntley/790937a759fd89ed77c8831f880f854c
-    creates a single geojson from a directory of geojsons
-    params:
-        out_file_name (str): optional filename to write the geojson to
-        geojson_dir_name (str): the dir containing subject geojsons
     
-    returns:
-        either None (if writing to file), or a geometry collection of all the geojsons
+    # after pagination is complete, flatten the list of dataframes into one variable
+    compiled_gdf = pd.concat(gdf_list, axis=0)
+
+    print(f'\ngeodataframe created successfully')
+
+    # return the compiled geodataframe
+    return compiled_gdf
+
+def mk_postgis_engine(database:dict, mk_engine:bool=True):
     """
-    file_list = list_contents('.geojson', geojson_dir_name)
-    collection = []
+    recieves a database dict, returns either an sqlalchemy engine object (if mk_engine==True),
+    or just a database url (if mk_engine==False).
 
-    for file in file_list:
-        with open(file, 'r') as f:
-            layer = geojson.load(f)
-            collection.append(layer)
-
-    geo_collection = geojson.GeometryCollection(collection)
-    if out_file_name != None:
-        with open(out_file_name, 'w') as f:
-            geojson.dump(geo_collection, f)
-        return None
+    dependencies: sqlalchemy as sa
+    """
+    if database["port"] not in (None, '', False):
+       url = f'postgresql://{database["user"]}:{database["password"]}@{database["host"]}:{database["port"]}/{database["database"]}'
     else:
-        return geo_collection
+       url = f'postgresql://{database["user"]}:{database["password"]}@{database["host"]}/{database["database"]}'
 
-
-def geojson_to_gpd(geojson_dir:str, clear_after=True,) -> gpd.GeoDataFrame:
-    """
-    reads every geojson contained in a specified directory, 
-    converting them into a single geopandas geodataframe.
-    params:
-        geojson_dir (str): the directory to comb for geojsons
-        clear_after (bool, default True): erase all contents of the directory
-    """
-    pages = list_contents('.geojson', geojson_dir)
-    df_list = []
-
-    # convert each geojson to a gpd dataframe
-    for page in pages:
-        new_gdf = gpd.GeoDataFrame.from_file(page)
-
-        df_list.append(new_gdf)
-
-    # report number of geojsons found
-    print(f'{len(df_list)} geojsons read into gdf\n')
-
-    # clear temporary geojson directory
-    if clear_after:
-        for file in os.scandir(geojson_dir):
-            os.remove(file.path)
-
-    # concatenate/flatten the dfs into a single gdf
-    data = pd.concat(df_list, axis=0)
-
-    return data
-
-
-def mk_postgis_url(usr:str, pw:str, host:str, port:str, db:str, schema:str) -> str:
-    """
-    constructs a sequence of strings into a url for a postgres engine.
-    params:
-        usr: db username
-        pw: db user pw
-        host: the host containing the db
-        port: the port the db is running on
-        db: the name of the target db
-        schema: the name of target schema
-        encrypt: encrypt username and pw
-    TODO: add encryption with urllib
-    """
-
-    if port != None:
-       postgis_url = f'postgresql://{usr}:{pw}@{host}:{port}/{db}'
+    if mk_engine:
+        engine = sa.create_engine(url)
+        return engine
     else:
-       postgis_url = f'postgresql://{usr}:{pw}@{host}/{db}'
-       
-    return postgis_url
+        return url
 
-def mk_postgis_engine(url:str):
+
+def oids_to_gdf(endpoint:dict, oid_list:list) -> gpd.GeoDataFrame:
     """
-    makes a postgres engine using the url parameter
-    (basically exists to avoid importing sqlalchemy in etl.py)
+    recieves an endpoint dict and a list of OBJECTIDs;
+    retrieves records with corresponsing ids and returns a geodataframe
+
+    Note: doesn't support paging
+
+    dependencies: requests as r, datetime as dt, geopandas as gpd
     """
-    engine = sa.create_engine(url)
-    return engine
+    # create OBJECTID query string
+    oid_def = 'objectIds='
+
+    # check if the caller is trying to get all records, call the regular paging function if so
+    if oid_list == ['all']:
+        print('refreshing all records')
+        return ags_to_gdf(endpoint)
+
+    # add segments to OBJECTID query string for each sought ID
+    for i in oid_list:
+        oid_def += f'{i}%2C+'
+
+    # remove trailing '%2c+' bits without .strip()
+    oid_def = oid_def[:-4]
+
+    # create url
+    url = f'https://{endpoint["host"]}/arcgis/rest/services/{endpoint["service"]}/{endpoint["service_type"]}/{endpoint["layer_id"]}/query?{oid_def}&outFields=*&f={endpoint["format"]}'
+
+    # make request to url
+    d = r.get(url)
+    print(f'request made using: \n{url}\n\n')
+        
+
+    # verify HTTP status
+    if d.status_code == None:
+        raise ValueError('Incorrect url probably.')
+    elif d.status_code != 200:
+        raise Exception(f'Error: {d.status_code}.')
+
+    # initialize a dict variable for current record
+    record = d.json()
+
+    # additional HTTP error handling
+    try:
+        print(f'Error:{record["error"]}')
+        exit()
+
+    except:
+        pass
+
+    # add timestamp and append to current record, one feature at a time
+    ts = dt.timestamp(dt.now())
+
+    for feature in record['features']:
+        feature['properties']['timestamp'] = ts
+
+    # make the dict into a gpd gdf
+    record_gdf = gpd.GeoDataFrame.from_features(record)
+
+    # return the compiled geodataframe
+    return record_gdf
+
+def update_with_gdf(database:dict, table:str, gdf) -> None:
+    """
+    recieves a database dict and a pre-processed geodataframe;
+    updates the database to reflect values of the input geodataframe.
+
+    note: geodataframe must have records matching those in the table (i.e. must be
+    from the same source and processed in the same way as existing records).
+
+    package dependencies: psycopg2 as ps, geopandas as gpd
+    """
+
+    # initialize postgres connection
+    con = ps.connect(
+        host=database["host"],
+        database=database["database"],
+        user=database["user"],
+        password=database["password"]
+    )
+
+    # create a cursor to read with
+    cur = con.cursor()
+
+    # initialize dataframe/SQL variables
+    oids = list(gdf["OBJECTID"])  #list of the gdf's OBJECTIDs
+    fields = list(gdf.columns.values)  #list of the gdf's fields
+    update_exp = [] # empty list of expressions to run later
+
+
+    # iterate through rows by oid, composing an SQL statement for each row and appending it to a list
+    for id in oids:
+        set_clause = 'SET' # start a "SET" clause for the statement
+
+        for field in fields:
+            if field in ("OBJECTID", 'geometry'): # ignore these fields bc they aren't expected to change
+                pass
+
+            else:
+                val = list(gdf.query(f'OBJECTID == {id}')[field])[0] # get values at intersection of oid (row) and field (column)
+                set_clause += f""" "{field}" = '{val}',""" # add SQL language to map the field and value
+
+        set_clause = set_clause[:-1] # remove the trailing comma
+
+        # after iterating through the row's fields, assemble the final SQL expression and add it to a list
+        update_exp.append(f"""UPDATE {table} {set_clause} WHERE "OBJECTID" = {id};""")
+
+    print(f'\nupdating OBJECTIDs {oids} in table "{table}"\n')
+
+    for exp in update_exp:
+        print(f'executing:\n{exp}')
+        cur.execute(exp)
+        
+
+    print('\n\nfinished updating.')
+
+    con.commit()
+    cur.close()
+    con.close()
+
+def retrieve_from_postgis(database:dict, table:str, oid_list:list ) -> dict:
+    """
+    returns a dictionary of records retrieved from an input postgres database/table,
+    corresponding to the input list of objectids (or a list containing a single string "all").
+
+    dependencies: psycopg2, ps
+    """
+    # initialize a string to represent the in IN expression's array
+    exp_array = ''
+        
+    # initialize a list to return records with
+    out_array = []
+
+    # initialize postgres connection
+    con = ps.connect(
+        host=database["host"],
+        database=database["database"],
+        user=database["user"],
+        password=database["password"]
+    )
+
+    # create a cursor to read with (realdict cursor returns rows as dictionaries)
+    cur = con.cursor(cursor_factory=RealDictCursor)
+
+    if oid_list in (["all"], 'all'):
+        exp = f'select * from {database["schema"]}.{table} order by "OBJECTID";'
+    else:
+        # iteratively add ids to the array string
+        for id in oid_list:
+            exp_array += f'{str(id)}, '
+
+        # remove trailing ', ' from array string
+        exp_array = exp_array[:-2]
+
+        # put together the final expression string
+        exp = f'select * from {database["schema"]}.{table} where "OBJECTID" in ({exp_array}) order by "OBJECTID";'
+
+    print(f'executing:\n\t{exp}')
+
+    # execute the select expression
+    cur.execute(exp)
+
+    # get query results as a list of rows
+    res = cur.fetchall()
+
+    # ditch the geometry field
+    for record in res:
+        rec = dict(record)
+        del rec['geometry']
+        out_array.append(rec)
+
+    cur.close()
+    con.close()
+
+    return out_array
