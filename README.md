@@ -20,7 +20,9 @@ conda env create -n <desired environment name> --file environment.yml
 conda activate <desired environment name>
 ```
 Once the environment is cloned and activated locally, use pip to install a pre-compiled binary version of psycopg2.
-`pip install psycopg2-binary`
+```
+pip install psycopg2-binary
+```
 
 ## Flask Setup
 To run the Flask API locally during development, make sure you've activated the conda environment and run the following:
