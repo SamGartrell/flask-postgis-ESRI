@@ -1,4 +1,4 @@
-# Backend with Python, Flask, and Postgis for ArcGIS Rest Data
+# Backend with Python, Flask, and Postgis for ArcGIS REST Data
 Architectural overview and instructions for local development
 
 ## Basic Design
