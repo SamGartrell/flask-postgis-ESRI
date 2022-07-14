@@ -1,10 +1,10 @@
-# Backend with Python, Flask, and Postgis for ArcGIS REST Data
+# Backend with Python, Flask, and Postgis for Retrieving/Processing ArcGIS REST Data
 Architectural overview and instructions for local development
 
 ## Basic Design
 **The Primary backend script is `etl.py`, with database and data source arguments derived from `etl_params.py` (not included in this repo):**
  <br />   - Uses functions from `etl_functions.py` to retrieve and process geojson data from ArcGIS Servers into workable geopandas dataframes.
- <br />   - Uses functions from `calc_functions.py` to develop attributes based on real estate business logic.
+ <br />   - Uses functions from `calc_functions.py` to perform desired analysis.
  <br />   - Uses functions from `etl_functions.py` to send processed geopandas dataframes to the postgres database.
  <br />   - Eventually will run on a chron job as an executable, routinely refreshing database records.
  
