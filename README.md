@@ -14,7 +14,7 @@
  <br />   - NOTE: The table targeted by the API is presently hardcoded into the API, constrained by fields defined in the API's data model (Flask convention). The model presently aids in formulating get requests, but hopefully I'll eliminate that dependency down the road and make the API more flexible in database connections. This would increase points of contact between the API and the ETL scripts, relegating the database to a less active role.
  
 ## Environment Setup
-Start with the `environment.yml` file in this repo: Navigate to the working directory and run the following.
+Start by with the `environment.yml` file in this repo: Navigate to the working directory and run the following once the file is downloaded.
 ```
 conda env create -n <desired environment name> --file environment.yml
 conda activate <desired environment name>
